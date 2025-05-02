@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimal Execution Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Use Inter font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for better focus rings etc. */
+        input:focus, select:focus, button:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); /* Tailwind blue-500 focus */
+        }
+        /* Ensure chart container maintains aspect ratio */
+        .chart-container {
+            position: relative;
+            height: 40vh; /* Adjust height as needed */
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+    <div class="max-w-6xl mx-auto bg-white rounded-lg shadow-md p-6 md:p-8">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6 text-center">Optimal Execution Tool</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 border-b pb-6">
+            <h2 class="text-xl font-semibold text-gray-700 col-span-1 md:col-span-2 mb-4">Configuration</h2>
+            <div>
+                <label for="finnhubKey" class="block text-sm font-medium text-gray-700 mb-1">Finnhub API Key</label>
+                <input type="password" id="finnhubKey" name="finnhubKey" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Your Finnhub Key">
+            </div>
+            <div>
+                <label for="fmpKey" class="block text-sm font-medium text-gray-700 mb-1">Financial Modeling Prep API Key</label>
+                <input type="password" id="fmpKey" name="fmpKey" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Your FMP Key">
+                 <p class="text-xs text-gray-500 mt-1">Note: API keys are handled client-side (not secure for production).</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 border-b pb-6">
+            <h2 class="text-xl font-semibold text-gray-700 col-span-1 md:col-span-3 mb-4">Trade Parameters</h2>
+            <div>
+                <label for="ticker" class="block text-sm font-medium text-gray-700 mb-1">Ticker Symbol</label>
+                <input type="text" id="ticker" name="ticker" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., AAPL">
+            </div>
+            <div>
+                <label for="quantity" class="block text-sm font-medium text-gray-700 mb-1">Total Quantity</label>
+                <input type="number" id="quantity" name="quantity" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 100000">
+            </div>
+            <div>
+                <label for="side" class="block text-sm font-medium text-gray-700 mb-1">Side</label>
+                <select id="side" name="side" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white">
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                </select>
+            </div>
+            <div>
+                <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">Execution Duration (Minutes)</label>
+                <input type="number" id="duration" name="duration" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 60">
+            </div>
+             <div>
+                <label for="intervals" class="block text-sm font-medium text-gray-700 mb-1">Number of Intervals</label>
+                <input type="number" id="intervals" name="intervals" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" value="10" placeholder="e.g., 10">
+            </div>
+             <div>
+                <label for="strategy" class="block text-sm font-medium text-gray-700 mb-1">Execution Strategy</label>
+                <select id="strategy" name="strategy" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white">
+                    <option value="ac-mean-variance">Almgren-Chriss (Mean-Variance)</option>
+                    <option value="twap">TWAP (Benchmark)</option>
+                    <option value="vwap">VWAP (Benchmark - Simulated)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="acParamsSection" class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 border-b pb-6">
+             <h2 class="text-xl font-semibold text-gray-700 col-span-1 md:col-span-4 mb-4">Model Parameters (Almgren-Chriss)</h2>
+             <p class="text-sm text-gray-600 col-span-1 md:col-span-4 mb-2">These parameters require careful estimation from historical data. Provide estimates below.</p>
+            <div>
+                <label for="volatility" class="block text-sm font-medium text-gray-700 mb-1">Volatility (σ, Annualized)</label>
+                <input type="number" step="0.01" id="volatility" name="volatility" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 0.30">
+            </div>
+            <div>
+                <label for="gamma" class="block text-sm font-medium text-gray-700 mb-1">Permanent Impact (γ)</label>
+                <input type="number" step="any" id="gamma" name="gamma" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 5e-7">
+                 <p class="text-xs text-gray-500 mt-1">Price move per share traded</p>
+            </div>
+             <div>
+                <label for="eta" class="block text-sm font-medium text-gray-700 mb-1">Temporary Impact (η)</label>
+                <input type="number" step="any" id="eta" name="eta" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 5e-6">
+                 <p class="text-xs text-gray-500 mt-1">Price move per unit trade rate</p>
+            </div>
+             <div>
+                <label for="lambda" class="block text-sm font-medium text-gray-700 mb-1">Risk Aversion (λ)</label>
+                <input type="number" step="any" id="lambda" name="lambda" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 1e-6">
+                 <p class="text-xs text-gray-500 mt-1">Higher values trade faster</p>
+            </div>
+        </div>
+
+        <div class="text-center mb-8">
+            <button id="calculateBtn" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out">
+                Calculate Execution Schedule
+            </button>
+        </div>
+
+        <div id="resultsSection" class="hidden">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Execution Schedule & Visualization</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+                     <h3 class="text-lg font-medium text-gray-800 mb-3 text-center">Planned Shares Remaining</h3>
+                    <div class="chart-container">
+                        <canvas id="executionChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg shadow-inner overflow-x-auto">
+                     <h3 class="text-lg font-medium text-gray-800 mb-3 text-center">Schedule Details</h3>
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-200">
+                            <tr>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Interval</th>
+                                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Time (min)</th>
+                                <th scope="col" class="px-4 py-2 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">Shares to Execute</th>
+                                <th scope="col" class="px-4 py-2 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">Shares Remaining</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scheduleTableBody" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+             <div id="costEstimateSection" class="mt-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                 <h3 class="text-lg font-medium text-blue-800 mb-2">Estimated Costs (A-C Model Only)</h3>
+                 <p id="costEstimateText" class="text-sm text-blue-700"></p>
+             </div>
+        </div>
+
+         <div id="errorMessage" class="hidden mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+            </div>
+
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const tickerInput = document.getElementById('ticker');
+        const quantityInput = document.getElementById('quantity');
+        const sideSelect = document.getElementById('side');
+        const durationInput = document.getElementById('duration');
+        const intervalsInput = document.getElementById('intervals');
+        const strategySelect = document.getElementById('strategy');
+        const volatilityInput = document.getElementById('volatility');
+        const gammaInput = document.getElementById('gamma');
+        const etaInput = document.getElementById('eta');
+        const lambdaInput = document.getElementById('lambda');
+        const calculateBtn = document.getElementById('calculateBtn');
+        const resultsSection = document.getElementById('resultsSection');
+        const scheduleTableBody = document.getElementById('scheduleTableBody');
+        const executionChartCanvas = document.getElementById('executionChart');
+        const acParamsSection = document.getElementById('acParamsSection');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const costEstimateSection = document.getElementById('costEstimateSection');
+        const costEstimateText = document.getElementById('costEstimateText');
+
+        let executionChart = null; // To hold the chart instance
+
+        // --- Event Listeners ---
+        calculateBtn.addEventListener('click', handleCalculation);
+        strategySelect.addEventListener('change', toggleAcParamsVisibility);
+
+        // --- Initial State ---
+        toggleAcParamsVisibility(); // Set initial visibility based on default strategy
+
+        // --- Functions ---
+
+        function toggleAcParamsVisibility() {
+            // Show A-C parameters only if A-C strategy is selected
+            if (strategySelect.value === 'ac-mean-variance') {
+                acParamsSection.style.display = 'grid'; // Use grid display
+                 costEstimateSection.style.display = 'block';
+            } else {
+                acParamsSection.style.display = 'none';
+                 costEstimateSection.style.display = 'none';
+            }
+        }
+
+        function displayError(message) {
+             console.error("Error:", message); // Log error to console
+            errorMessageDiv.textContent = `Error: ${message}`;
+            errorMessageDiv.classList.remove('hidden');
+            resultsSection.classList.add('hidden'); // Hide results on error
+        }
+
+        function clearError() {
+            errorMessageDiv.classList.add('hidden');
+            errorMessageDiv.textContent = '';
+        }
+
+        function validateInputs() {
+            clearError();
+            const quantity = parseFloat(quantityInput.value);
+            const duration = parseFloat(durationInput.value);
+            const intervals = parseInt(intervalsInput.value);
+
+            if (!tickerInput.value) return "Ticker symbol is required.";
+            if (isNaN(quantity) || quantity <= 0) return "Total quantity must be a positive number.";
+            if (isNaN(duration) || duration <= 0) return "Execution duration must be a positive number.";
+            if (isNaN(intervals) || intervals <= 1) return "Number of intervals must be greater than 1.";
+
+            if (strategySelect.value === 'ac-mean-variance') {
+                const volatility = parseFloat(volatilityInput.value);
+                const gamma = parseFloat(gammaInput.value);
+                const eta = parseFloat(etaInput.value);
+                const lambda = parseFloat(lambdaInput.value);
+
+                if (isNaN(volatility) || volatility <= 0) return "Volatility (σ) must be a positive number.";
+                if (isNaN(gamma) || gamma < 0) return "Permanent impact (γ) must be non-negative.";
+                 // Allow eta == 0 for pure permanent impact model
+                if (isNaN(eta) || eta < 0) return "Temporary impact (η) must be non-negative.";
+                if (eta === 0 && gamma === 0) return "At least one impact parameter (γ or η) must be non-zero.";
+                 // Allow lambda == 0 for pure expectation maximization
+                if (isNaN(lambda) || lambda < 0) return "Risk aversion (λ) must be non-negative.";
+                 // Check for eta=0 case in kappa calculation later if needed
+                if (eta === 0 && lambda > 0 && volatility > 0) return "Cannot use Mean-Variance (λ > 0) with zero temporary impact (η = 0). Set λ = 0 or provide η > 0.";
+
+            }
+            return null; // No errors
+        }
+
+        async function handleCalculation() {
+            const error = validateInputs();
+            if (error) {
+                displayError(error);
+                return;
+            }
+
+            // --- Get Input Values ---
+            const totalQuantity = parseFloat(quantityInput.value);
+            const totalDurationMinutes = parseFloat(durationInput.value);
+            const numIntervals = parseInt(intervalsInput.value);
+            const strategy = strategySelect.value;
+            const side = sideSelect.value;
+            const sign = (side === 'sell' ? 1 : -1); // x0 is positive for sell, negative for buy
+            const x0 = sign * totalQuantity; // Initial position
+
+            const dt = totalDurationMinutes / numIntervals; // Duration of each interval in minutes
+            const T = totalDurationMinutes; // Total time in minutes
+
+            let schedule = []; // Array to hold { time, sharesToExecute, sharesRemaining }
+
+            try {
+                 // --- Fetch Data (Simulated) ---
+                 // In a real app, fetch current price, volume estimates etc. here using API keys
+                 console.log("Fetching data (simulated)...");
+                 // const currentPrice = await fetchPrice(tickerInput.value, finnhubKey.value);
+                 // const avgVolume = await fetchVolume(tickerInput.value, fmpKey.value);
+                 console.log("Data fetch complete (simulated).");
+
+
+                // --- Calculate Schedule based on Strategy ---
+                if (strategy === 'twap') {
+                    schedule = calculateTwapSchedule(x0, T, numIntervals, dt);
+                } else if (strategy === 'vwap') {
+                    // VWAP requires volume profile prediction - very simplified here
+                    schedule = calculateVwapSchedule_Simplified(x0, T, numIntervals, dt);
+                } else if (strategy === 'ac-mean-variance') {
+                     const volatility = parseFloat(volatilityInput.value);
+                     const gamma = parseFloat(gammaInput.value);
+                     const eta = parseFloat(etaInput.value);
+                     const lambda = parseFloat(lambdaInput.value);
+                     // Convert annualized volatility to volatility per minute
+                     // Assuming 252 trading days, 6.5 hours/day, 60 mins/hour
+                     const minutesPerYear = 252 * 6.5 * 60;
+                     const sigma_minute = volatility / Math.sqrt(minutesPerYear);
+
+                     if (eta === 0 && lambda === 0) {
+                         // Special case: Maximize expectation with only permanent impact => Trade instantly (or TWAP)
+                         // The model suggests instant trade, but practically TWAP is often used.
+                         console.log("A-C with γ > 0, η = 0, λ = 0. Using TWAP as practical implementation.");
+                         schedule = calculateTwapSchedule(x0, T, numIntervals, dt);
+                     } else if (eta === 0) {
+                          // This case was blocked by validation if lambda > 0
+                          displayError("Internal error: Should not reach A-C calculation with eta=0 and lambda>0.");
+                          return;
+                     }
+                     else {
+                        schedule = calculateAcMeanVarianceSchedule(x0, T, numIntervals, dt, sigma_minute, gamma, eta, lambda);
+                        // Estimate costs for A-C
+                        const costs = estimateAcCosts(schedule, x0, sigma_minute, gamma, eta, lambda, T);
+                        costEstimateText.innerHTML = `
+                            Expected Execution Cost (η term): ${costs.execCostEta.toFixed(4)} <br>
+                            Permanent Impact Cost (γ term): ${costs.execCostGamma.toFixed(4)} <br>
+                            Estimated Variance (Risk Cost): ${costs.varianceCost.toFixed(4)} * λ = ${(costs.varianceCost * lambda).toFixed(4)} <br>
+                            <strong>Total Estimated Objective Function Cost: ${costs.totalCost.toFixed(4)}</strong>
+                            <br><span class="text-xs">(Costs are in price units * shares^2 or similar, relative to initial value)</span>`;
+                     }
+                }
+
+                // --- Display Results ---
+                displayScheduleTable(schedule);
+                displayExecutionChart(schedule);
+                resultsSection.classList.remove('hidden');
+
+            } catch (err) {
+                 displayError(`Calculation failed: ${err.message}`);
+                 console.error(err); // Log full error
+            }
+        }
+
+        // --- Calculation Functions ---
+
+        function calculateTwapSchedule(x0, T, numIntervals, dt) {
+            const sharesPerInterval = x0 / numIntervals;
+            let remaining = x0;
+            const schedule = [];
+            for (let i = 0; i < numIntervals; i++) {
+                const executeNow = sharesPerInterval;
+                remaining -= executeNow;
+                // Ensure remaining doesn't go significantly below zero due to float issues
+                if (i === numIntervals - 1) remaining = 0;
+
+                schedule.push({
+                    interval: i + 1,
+                    time: (i + 1) * dt,
+                    sharesToExecute: Math.abs(executeNow), // Display positive shares
+                    sharesRemaining: Math.abs(remaining < 1e-6 ? 0 : remaining) // Clean up near zero
+                });
+            }
+            return schedule;
+        }
+
+        function calculateVwapSchedule_Simplified(x0, T, numIntervals, dt) {
+            // !! EXTREMELY Simplified VWAP !!
+            // Assumes a U-shaped volume profile (higher at start/end)
+            // This is NOT a proper VWAP calculation which needs predicted volume.
+            console.warn("Using highly simplified VWAP calculation based on U-shape assumption.");
+            const schedule = [];
+            let remaining = x0;
+            const baseShare = x0 / numIntervals;
+            const weights = [];
+            let totalWeight = 0;
+
+            // Create a simple U-shape weight profile
+            for (let i = 0; i < numIntervals; i++) {
+                // Example U-shape: quadratic
+                const weight = Math.pow(i - (numIntervals - 1) / 2, 2) + 1;
+                weights.push(weight);
+                totalWeight += weight;
+            }
+
+            for (let i = 0; i < numIntervals; i++) {
+                const executeNow = x0 * (weights[i] / totalWeight);
+                remaining -= executeNow;
+                 if (i === numIntervals - 1) remaining = 0;
+
+                schedule.push({
+                    interval: i + 1,
+                    time: (i + 1) * dt,
+                    sharesToExecute: Math.abs(executeNow),
+                    sharesRemaining: Math.abs(remaining < 1e-6 ? 0 : remaining)
+                });
+            }
+            return schedule;
+        }
+
+
+        function calculateAcMeanVarianceSchedule(x0, T, numIntervals, dt, sigma_minute, gamma, eta, lambda) {
+            // Ensure eta > 0 before calculating kappa
+            if (eta <= 0) {
+                 // This case should ideally be handled before calling,
+                 // but double-check to avoid division by zero or sqrt of negative.
+                 // If lambda is also 0, TWAP is used. If lambda > 0, it's an error state.
+                 throw new Error("Cannot calculate A-C Mean-Variance with eta <= 0 and lambda > 0.");
+            }
+
+             // Calculate kappa = sqrt(lambda * sigma^2 / (2 * eta))
+             // Use sigma_minute for consistency with time T in minutes
+            const kappa_num = lambda * Math.pow(sigma_minute, 2);
+            const kappa_den = 2 * eta;
+
+            // If kappa_num / kappa_den is effectively zero (e.g., lambda or sigma is zero)
+            // the optimal strategy degenerates towards TWAP. Handle sinh(0)/sinh(0).
+             let kappa = 0;
+             if (kappa_den > 1e-15 && kappa_num > 1e-15) { // Avoid division by zero and handle zero lambda/sigma
+                 kappa = Math.sqrt(kappa_num / kappa_den);
+             }
+
+
+            const schedule = [];
+            let lastRemaining = x0;
+
+            for (let i = 0; i < numIntervals; i++) {
+                const t = (i + 1) * dt; // Time at the *end* of the interval
+                let currentRemaining;
+
+                 // Handle kappa near zero to avoid NaN from sinh(0)/sinh(0)
+                 // The limit of sinh(k*(T-t))/sinh(k*T) as k->0 is (T-t)/T (linear TWAP path)
+                if (Math.abs(kappa * T) < 1e-9) {
+                     currentRemaining = x0 * (T - t) / T;
+                } else {
+                     const sinh_kT = Math.sinh(kappa * T);
+                     if (Math.abs(sinh_kT) < 1e-15) {
+                         // Should not happen if kappa*T is not near zero, but safety check
+                         console.warn("Denominator sinh(kappa*T) is near zero. Approximating with TWAP.");
+                         currentRemaining = x0 * (T - t) / T;
+                     } else {
+                         currentRemaining = x0 * Math.sinh(kappa * (T - t)) / sinh_kT;
+                     }
+                }
+
+
+                // Ensure remaining is exactly 0 at the end
+                if (i === numIntervals - 1) {
+                    currentRemaining = 0;
+                }
+
+                const executeNow = lastRemaining - currentRemaining;
+                lastRemaining = currentRemaining;
+
+                schedule.push({
+                    interval: i + 1,
+                    time: t,
+                    sharesToExecute: Math.abs(executeNow),
+                    sharesRemaining: Math.abs(currentRemaining < 1e-6 ? 0 : currentRemaining)
+                });
+            }
+            return schedule;
+        }
+
+         function estimateAcCosts(schedule, x0, sigma_minute, gamma, eta, lambda, T) {
+             // Estimate costs based on the formula components
+             // Cost = E[R(X)] - lambda * Var(R(X))
+             // E[R(X)] = S0*x0 - gamma/2 * x0^2 - eta * integral( (dX/dt)^2 dt )
+             // Var(R(X)) = sigma^2 * integral( X(t)^2 dt )
+
+             let integral_rate_sq = 0;
+             let integral_pos_sq = 0;
+             const dt = T / schedule.length; // Assuming equal intervals
+
+             let lastRemaining = x0;
+             schedule.forEach((step, i) => {
+                 const rate = (step.sharesToExecute / dt) * (x0 > 0 ? -1 : 1); // dX/dt (negative for sell)
+                 integral_rate_sq += Math.pow(rate, 2) * dt;
+
+                 // Approximate integral of X(t)^2 using value at start of interval
+                 integral_pos_sq += Math.pow(lastRemaining, 2) * dt;
+                 lastRemaining = step.sharesRemaining * Math.sign(x0); // Keep sign for X(t)
+             });
+
+             const execCostEta = eta * integral_rate_sq; // Cost from temporary impact
+             const execCostGamma = (gamma / 2) * Math.pow(x0, 2); // Cost from permanent impact
+             const varianceCost = Math.pow(sigma_minute, 2) * integral_pos_sq; // Variance term (needs scaling by lambda)
+
+             // Total cost minimized by the objective function (ignoring S0*x0)
+             const totalCost = execCostGamma + execCostEta + lambda * varianceCost;
+
+             return { execCostEta, execCostGamma, varianceCost, totalCost };
+         }
+
+
+        // --- Display Functions ---
+
+        function displayScheduleTable(schedule) {
+            scheduleTableBody.innerHTML = ''; // Clear previous results
+            schedule.forEach(step => {
+                const row = `
+                    <tr>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-800">${step.interval}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">${step.time.toFixed(2)}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-800 text-right">${Math.round(step.sharesToExecute).toLocaleString()}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-800 text-right">${Math.round(step.sharesRemaining).toLocaleString()}</td>
+                    </tr>
+                `;
+                scheduleTableBody.innerHTML += row;
+            });
+        }
+
+        function displayExecutionChart(schedule) {
+            const labels = [0, ...schedule.map(step => step.time.toFixed(2))]; // Start at time 0
+            const data = [Math.abs(parseFloat(quantityInput.value)), ...schedule.map(step => step.sharesRemaining)]; // Start with initial quantity
+
+            const chartData = {
+                labels: labels,
+                datasets: [{
+                    label: 'Shares Remaining',
+                    data: data,
+                    borderColor: 'rgb(59, 130, 246)', // Tailwind blue-500
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.1 // Slightly smooth the line
+                }]
+            };
+
+            const config = {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Allow chart to fill container height
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time (Minutes)'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Shares Remaining'
+                            },
+                            beginAtZero: true,
+                             ticks: {
+                                // Format y-axis ticks for better readability
+                                callback: function(value, index, values) {
+                                    if (value >= 1e6) return (value / 1e6) + 'M';
+                                    if (value >= 1e3) return (value / 1e3) + 'K';
+                                    return value;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false // Hide legend if only one dataset
+                        },
+                        tooltip: {
+                             callbacks: {
+                                label: function(context) {
+                                     let label = context.dataset.label || '';
+                                     if (label) {
+                                         label += ': ';
+                                     }
+                                     if (context.parsed.y !== null) {
+                                         label += Math.round(context.parsed.y).toLocaleString();
+                                     }
+                                     return label;
+                                 }
+                             }
+                         }
+                    }
+                }
+            };
+
+            // Destroy previous chart instance if it exists
+            if (executionChart) {
+                executionChart.destroy();
+            }
+            // Create new chart instance
+            executionChart = new Chart(executionChartCanvas, config);
+        }
+
+        // --- API Fetch Simulation (Replace with actual fetch calls) ---
+        // async function fetchPrice(ticker, apiKey) {
+        //     console.log(`Simulating fetch price for ${ticker}`);
+        //     // const url = `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`;
+        //     // const response = await fetch(url);
+        //     // if (!response.ok) throw new Error('Failed to fetch price from Finnhub');
+        //     // const data = await response.json();
+        //     // return data.c; // Current price
+        //     return 150.00; // Placeholder
+        // }
+
+        // async function fetchVolume(ticker, apiKey) {
+        //      console.log(`Simulating fetch volume for ${ticker}`);
+        //     // const url = `https://financialmodelingprep.com/api/v3/historical-chart/1min/${ticker}?apikey=${apiKey}`; // Example endpoint
+        //     // ... fetch and calculate average volume ...
+        //     return 5000000; // Placeholder average daily volume
+        // }
+
+    </script>
+</body>
+</html>
